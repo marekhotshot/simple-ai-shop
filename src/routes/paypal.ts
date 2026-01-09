@@ -12,7 +12,7 @@ async function getPayPalToken() {
   const clientId = await loadSetting(`${prefix}.client_id`);
   const clientSecret = await loadSetting(`${prefix}.client_secret`);
   if (!clientId || !clientSecret) {
-    return null;
+    throw new Error('PayPal credentials missing');
   }
   const baseUrl = mode === 'live' ? config.paypal.liveBaseUrl : config.paypal.sandboxBaseUrl;
   const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
@@ -54,12 +54,7 @@ router.post('/create-order', async (req, res) => {
     return;
   }
 
-  const token = await getPayPalToken();
-  if (!token) {
-    res.status(503).json({ error: 'PayPal not configured' });
-    return;
-  }
-  const { accessToken, baseUrl } = token;
+  const { accessToken, baseUrl } = await getPayPalToken();
   const response = await fetch(`${baseUrl}/v2/checkout/orders`, {
     method: 'POST',
     headers: {
@@ -90,8 +85,8 @@ router.post('/create-order', async (req, res) => {
 
   const data = (await response.json()) as { id: string };
   await query(
-    `INSERT INTO orders (product_id, paypal_order_id, status, amount_cents, payment_method)
-     VALUES ($1, $2, 'CREATED', $3, 'PAYPAL')`,
+    `INSERT INTO orders (product_id, paypal_order_id, status, amount_cents)
+     VALUES ($1, $2, 'CREATED', $3)`,
     [product.id, data.id, product.price_cents],
   );
 
@@ -109,12 +104,7 @@ router.post('/capture-order', async (req, res) => {
     return;
   }
 
-  const token = await getPayPalToken();
-  if (!token) {
-    res.status(503).json({ error: 'PayPal not configured' });
-    return;
-  }
-  const { accessToken, baseUrl } = token;
+  const { accessToken, baseUrl } = await getPayPalToken();
   const response = await fetch(`${baseUrl}/v2/checkout/orders/${parsed.data.orderId}/capture`, {
     method: 'POST',
     headers: {

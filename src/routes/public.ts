@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { query } from '../db.js';
 import { fallbackText, resolveLocale } from '../lib/i18n.js';
 import { sendMail } from '../lib/email.js';
-import { loadSetting } from '../lib/settings.js';
 
 const router = Router();
 
@@ -184,85 +183,6 @@ router.post('/contact', async (req, res) => {
   });
 
   res.json({ id: rows[0].id, mailSent: emailResult.sent, mailReason: emailResult.reason ?? null });
-});
-
-const bankTransferSchema = z.object({
-  productId: z.string().uuid(),
-  name: z.string().min(1),
-  email: z.string().email(),
-  country: z.string().optional().nullable(),
-});
-
-router.post('/orders/bank-transfer', async (req, res) => {
-  const parsed = bankTransferSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-
-  const productRows = await query<{ id: string; price_cents: number; status: string }>(
-    'SELECT id, price_cents, status FROM products WHERE id = $1',
-    [parsed.data.productId],
-  );
-  const product = productRows[0];
-  if (!product || product.status !== 'AVAILABLE') {
-    res.status(409).json({ error: 'Product not available' });
-    return;
-  }
-
-  const orderRows = await query<{ id: string }>(
-    `INSERT INTO orders (product_id, status, amount_cents, buyer_email, shipping_country, payment_method)
-     VALUES ($1, 'CREATED', $2, $3, $4, 'BANK_TRANSFER')
-     RETURNING id`,
-    [product.id, product.price_cents, parsed.data.email, parsed.data.country ?? null],
-  );
-
-  const details = await loadSetting('bank.transfer.details');
-
-  res.status(201).json({ orderId: orderRows[0].id, bankTransferDetails: details ?? null });
-});
-
-router.get('/products/:slug/share', async (req, res) => {
-  const locale = resolveLocale(String(req.query.lang ?? 'sk'));
-  const slug = req.params.slug;
-
-  const rows = await query<{
-    id: string;
-    slug: string;
-    title_sk: string | null;
-    desc_sk: string | null;
-    title_en: string | null;
-    desc_en: string | null;
-  }>(
-    `SELECT p.id, p.slug,
-      sk.title AS title_sk, sk.description_short AS desc_sk,
-      en.title AS title_en, en.description_short AS desc_en
-    FROM products p
-    LEFT JOIN product_translations sk ON sk.product_id = p.id AND sk.locale = 'sk'
-    LEFT JOIN product_translations en ON en.product_id = p.id AND en.locale = 'en'
-    WHERE p.slug = $1`,
-    [slug],
-  );
-
-  if (!rows[0]) {
-    res.status(404).json({ error: 'Not found' });
-    return;
-  }
-
-  const imageRows = await query<{ path: string | null }>(
-    `SELECT path FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC LIMIT 1`,
-    [rows[0].id],
-  );
-
-  res.json({
-    slug: rows[0].slug,
-    title: fallbackText(rows[0].title_sk ?? '', locale === 'en' ? rows[0].title_en : rows[0].title_sk),
-    descriptionShort: fallbackText(
-      rows[0].desc_sk ?? '',
-      locale === 'en' ? rows[0].desc_en : rows[0].desc_sk,
-    ),
-    image: imageRows[0]?.path ?? null,
-  });
 });
 
 export default router;

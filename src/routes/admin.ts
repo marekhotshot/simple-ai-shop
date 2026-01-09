@@ -126,7 +126,6 @@ router.get('/settings/integrations', async (_req, res) => {
     'google.features.remove_bg.enabled',
     'google.features.enhance.enabled',
     'google.features.gen_desc.enabled',
-    'bank.transfer.details',
   ];
   const flags = await loadSettingFlags(keys);
   res.json({ configured: flags });
