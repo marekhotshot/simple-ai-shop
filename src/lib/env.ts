@@ -13,7 +13,7 @@ function requireEnv(key: string): string {
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: requireEnv('DATABASE_URL'),
-  dataRoot: process.env.DATA_ROOT ?? '/data/uploads',
+  dataRoot: process.env.DATA_ROOT ?? './data/uploads',
   settingsMasterKey: requireEnv('SETTINGS_MASTER_KEY'),
   mail: {
     host: process.env.SMTP_HOST ?? '',
@@ -31,4 +31,6 @@ export const config = {
   google: {
     apiBaseUrl: process.env.GOOGLE_API_BASE_URL ?? 'https://generativelanguage.googleapis.com',
   },
+  apiBaseUrl: process.env.API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
+  imageBaseUrl: process.env.IMAGE_BASE_URL ?? process.env.API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
 };

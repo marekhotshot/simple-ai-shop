@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: igormraz
+data:
+  PORT: "3000"
+  DATA_ROOT: "/data/uploads"
+  API_BASE_URL: "http://backend:3000"
+  IMAGE_BASE_URL: "http://backend:3000"
+  PAYPAL_MODE: "sandbox"
+  PAYPAL_SANDBOX_BASE_URL: "https://api-m.sandbox.paypal.com"
+  PAYPAL_LIVE_BASE_URL: "https://api-m.paypal.com"
+  GOOGLE_API_BASE_URL: "https://generativelanguage.googleapis.com"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secret
+  namespace: igormraz
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://postgres:postgres@postgresql:5432/simple_ai_shop"
+  SETTINGS_MASTER_KEY: "change-this-master-key-in-production"
+  SMTP_HOST: ""
+  SMTP_PORT: "587"
+  SMTP_USER: ""
+  SMTP_PASS: ""
+  MAIL_TO: ""
+  MAIL_FROM: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-data
+  namespace: igormraz
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: igormraz
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+      - name: build
+        image: node:20-alpine
+        command: ["sh", "-c"]
+        args:
+        - |
+          apk add --no-cache git
+          corepack enable && corepack prepare pnpm@9.0.0 --activate
+          cd /workspace
+          if [ -n "$GIT_REPO" ]; then
+            git clone $GIT_REPO .
+          else
+            echo "GIT_REPO not set, using mounted source"
+          fi
+          pnpm install --frozen-lockfile
+          pnpm build
+          cp -r dist /app/dist
+          cp -r run-migration.js /app/
+          cp -r db /app/db
+          cp package.json pnpm-lock.yaml /app/
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        - name: app
+          mountPath: /app
+      containers:
+      - name: backend
+        image: node:20-alpine
+        workingDir: /app
+        command: ["sh", "-c"]
+        args:
+        - |
+          corepack enable && corepack prepare pnpm@9.0.0 --activate
+          pnpm install --prod --frozen-lockfile
+          mkdir -p /data/uploads/tmp
+          node dist/index.js
+        ports:
+        - containerPort: 3000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secret
+        volumeMounts:
+        - name: data
+          mountPath: /data/uploads
+        - name: app
+          mountPath: /app
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: backend-data
+      - name: workspace
+        emptyDir: {}
+      - name: app
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: igormraz
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: backend

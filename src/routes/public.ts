@@ -18,7 +18,7 @@ router.get('/products', async (req, res) => {
     filters.push(`p.category = $${params.length}`);
   }
   if (availableOnly) {
-    params.push(true);
+    // Note: Not using a parameter here since we're using a hardcoded value
     filters.push(`p.status = 'AVAILABLE'`);
   }
 
@@ -56,12 +56,120 @@ router.get('/products', async (req, res) => {
     category: row.category,
     priceCents: row.price_cents,
     status: row.status,
-    title: fallbackText(row.title_sk ?? '', locale === 'en' ? row.title_en : row.title_sk),
-    descriptionShort: fallbackText(row.desc_sk ?? '', locale === 'en' ? row.desc_en : row.desc_sk),
+    title: fallbackText(row.title_sk ?? '', row.title_en, locale),
+    descriptionShort: fallbackText(row.desc_sk ?? '', row.desc_en, locale),
     primaryImage: row.primary_image,
   }));
 
   res.json({ products: response });
+});
+
+router.get('/products/:id/recommendations', async (req, res) => {
+  const locale = resolveLocale(String(req.query.lang ?? 'sk'));
+  const productId = req.params.id;
+
+  // Get the product's category first
+  const productRows = await query<{ category: string }>(
+    'SELECT category FROM products WHERE id = $1',
+    [productId],
+  );
+
+  if (!productRows[0]) {
+    res.status(404).json({ error: 'Product not found' });
+    return;
+  }
+
+  const category = productRows[0].category;
+
+  // Get other products from the same category, excluding the current product
+  const rows = await query<{
+    id: string;
+    slug: string;
+    category: string;
+    price_cents: number;
+    status: string;
+    title_sk: string | null;
+    desc_sk: string | null;
+    title_en: string | null;
+    desc_en: string | null;
+    primary_image: string | null;
+  }>(
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+      sk.title AS title_sk, sk.description_short AS desc_sk,
+      en.title AS title_en, en.description_short AS desc_en,
+      img.path AS primary_image
+    FROM products p
+    LEFT JOIN product_translations sk ON sk.product_id = p.id AND sk.locale = 'sk'
+    LEFT JOIN product_translations en ON en.product_id = p.id AND en.locale = 'en'
+    LEFT JOIN LATERAL (
+      SELECT path FROM product_images WHERE product_id = p.id ORDER BY sort_order ASC LIMIT 1
+    ) img ON true
+    WHERE p.category = $1 AND p.id != $2 AND p.status = 'AVAILABLE'
+    ORDER BY p.created_at DESC
+    LIMIT 4`,
+    [category, productId],
+  );
+
+  const response = rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    category: row.category,
+    priceCents: row.price_cents,
+    status: row.status,
+    title: fallbackText(row.title_sk ?? '', row.title_en, locale),
+    descriptionShort: fallbackText(row.desc_sk ?? '', row.desc_en, locale),
+    primaryImage: row.primary_image,
+  }));
+
+  res.json({ products: response });
+});
+
+router.get('/products/id/:id', async (req, res) => {
+  const locale = resolveLocale(String(req.query.lang ?? 'sk'));
+  const productId = req.params.id;
+
+  const rows = await query<{
+    id: string;
+    slug: string;
+    category: string;
+    price_cents: number;
+    status: string;
+    title_sk: string | null;
+    desc_sk: string | null;
+    title_en: string | null;
+    desc_en: string | null;
+  }>(
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+      sk.title AS title_sk, sk.description_short AS desc_sk,
+      en.title AS title_en, en.description_short AS desc_en
+    FROM products p
+    LEFT JOIN product_translations sk ON sk.product_id = p.id AND sk.locale = 'sk'
+    LEFT JOIN product_translations en ON en.product_id = p.id AND en.locale = 'en'
+    WHERE p.id = $1`,
+    [productId],
+  );
+
+  if (!rows[0]) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
+  const images = await query<{ path: string; variant: string; width: number | null; height: number | null }>(
+    'SELECT path, variant, width, height FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC',
+    [rows[0].id],
+  );
+
+  res.json({
+    id: rows[0].id,
+    slug: rows[0].slug,
+    category: rows[0].category,
+    priceCents: rows[0].price_cents,
+    status: rows[0].status,
+    title: fallbackText(rows[0].title_sk ?? '', rows[0].title_en, locale),
+    description: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
+    descriptionShort: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
+    images,
+  });
 });
 
 router.get('/products/:slug', async (req, res) => {
@@ -94,8 +202,8 @@ router.get('/products/:slug', async (req, res) => {
     return;
   }
 
-  const images = await query<{ path: string; variant: string }>(
-    'SELECT path, variant FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC',
+  const images = await query<{ path: string; variant: string; width: number | null; height: number | null }>(
+    'SELECT path, variant, width, height FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC',
     [rows[0].id],
   );
 
@@ -105,11 +213,9 @@ router.get('/products/:slug', async (req, res) => {
     category: rows[0].category,
     priceCents: rows[0].price_cents,
     status: rows[0].status,
-    title: fallbackText(rows[0].title_sk ?? '', locale === 'en' ? rows[0].title_en : rows[0].title_sk),
-    descriptionShort: fallbackText(
-      rows[0].desc_sk ?? '',
-      locale === 'en' ? rows[0].desc_en : rows[0].desc_sk,
-    ),
+    title: fallbackText(rows[0].title_sk ?? '', rows[0].title_en, locale),
+    description: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
+    descriptionShort: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
     images,
   });
 });

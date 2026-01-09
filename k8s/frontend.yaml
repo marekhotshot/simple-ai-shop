@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: igormraz
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  HOSTNAME: "0.0.0.0"
+  NEXT_PUBLIC_EXPRESS_API_URL: "http://backend:3000"
+  NEXT_PUBLIC_IMAGE_BASE_URL: "http://backend:3000"
+  EXPRESS_API_URL: "http://backend:3000"
+  IMAGE_BASE_URL: "http://backend:3000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: frontend-secret
+  namespace: igormraz
+type: Opaque
+stringData:
+  SHOPIFY_STORE_DOMAIN: "your-store.myshopify.com"
+  SHOPIFY_STOREFRONT_ACCESS_TOKEN: "your-storefront-access-token"
+  SITE_NAME: "Simple AI Shop"
+  COMPANY_NAME: "Simple AI Shop"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: igormraz
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: simple-ai-shop-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: frontend-config
+        - secretRef:
+            name: frontend-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 40
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: igormraz
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: frontend
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: igormraz
+spec:
+  rules:
+  - host: simple-ai-shop.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /uploads
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000

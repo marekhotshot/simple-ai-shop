@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-backend
+  namespace: igormraz
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+        - --dockerfile=/workspace/Dockerfile.backend
+        - --context=/workspace
+        - --destination=simple-ai-shop-backend:latest
+        - --destination=localhost:5000/simple-ai-shop-backend:latest
+        - --insecure
+        - --skip-tls-verify
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        - name: docker-config
+          mountPath: /kaniko/.docker
+      volumes:
+      - name: workspace
+        configMap:
+          name: backend-source
+      - name: docker-config
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-source
+  namespace: igormraz
+binaryData: {}

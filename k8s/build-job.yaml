@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: build-backend
+  namespace: igormraz
+spec:
+  restartPolicy: Never
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    args:
+    - --dockerfile=/workspace/Dockerfile.backend
+    - --context=dir:///workspace
+    - --destination=simple-ai-shop-backend:latest
+    - --no-push
+    - --tarPath=/workspace/backend.tar
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  volumes:
+  - name: workspace
+    hostPath:
+      path: /tmp/build-workspace
+      type: DirectoryOrCreate

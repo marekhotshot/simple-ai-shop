@@ -1,0 +1,21 @@
+{
+  "name": "Workspace",
+  "dockerFile": "Dockerfile",
+  "context": "..",
+  "build": {
+    "args": {
+      "NODE_MAJOR_VERSION": "20"
+    }
+  },
+  "postCreateCommand": "sudo chown -R nex:nex /home/nex/.cursor-server && sudo chmod -R 755 /home/nex/.cursor-server",
+  "mounts": [
+    "source=cursor-workspace-storage,target=/home/nex/.cursor-server,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
