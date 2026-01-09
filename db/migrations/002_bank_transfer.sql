@@ -1,0 +1,4 @@
+ALTER TABLE orders
+  ALTER COLUMN paypal_order_id DROP NOT NULL,
+  ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'PAYPAL'
+    CHECK (payment_method IN ('PAYPAL', 'BANK_TRANSFER'));
