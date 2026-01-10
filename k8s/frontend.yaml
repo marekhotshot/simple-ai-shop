@@ -7,8 +7,8 @@ data:
   NODE_ENV: "production"
   PORT: "3000"
   HOSTNAME: "0.0.0.0"
-  NEXT_PUBLIC_EXPRESS_API_URL: "http://backend:3000"
-  NEXT_PUBLIC_IMAGE_BASE_URL: "http://backend:3000"
+  NEXT_PUBLIC_EXPRESS_API_URL: "https://igormraz.com/api"
+  NEXT_PUBLIC_IMAGE_BASE_URL: "https://igormraz.com"
   EXPRESS_API_URL: "http://backend:3000"
   IMAGE_BASE_URL: "http://backend:3000"
 ---
@@ -21,8 +21,8 @@ type: Opaque
 stringData:
   SHOPIFY_STORE_DOMAIN: "your-store.myshopify.com"
   SHOPIFY_STOREFRONT_ACCESS_TOKEN: "your-storefront-access-token"
-  SITE_NAME: "Simple AI Shop"
-  COMPANY_NAME: "Simple AI Shop"
+  SITE_NAME: "igormraz"
+  COMPANY_NAME: "igormraz"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,8 +43,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: simple-ai-shop-frontend:latest
-        imagePullPolicy: IfNotPresent
+        image: marekhotshot/igormraz-frontend:0.1
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http
@@ -93,9 +93,35 @@ kind: Ingress
 metadata:
   name: frontend-ingress
   namespace: igormraz
+  annotations:
+    kubernetes.io/ingress.class: traefik
 spec:
   rules:
-  - host: simple-ai-shop.local
+  - host: igormraz.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /uploads
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+  - host: www.igormraz.com
     http:
       paths:
       - path: /

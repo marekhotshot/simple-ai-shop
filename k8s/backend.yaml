@@ -6,8 +6,8 @@ metadata:
 data:
   PORT: "3000"
   DATA_ROOT: "/data/uploads"
-  API_BASE_URL: "http://backend:3000"
-  IMAGE_BASE_URL: "http://backend:3000"
+  API_BASE_URL: "https://igormraz.com/api"
+  IMAGE_BASE_URL: "https://igormraz.com"
   PAYPAL_MODE: "sandbox"
   PAYPAL_SANDBOX_BASE_URL: "https://api-m.sandbox.paypal.com"
   PAYPAL_LIVE_BASE_URL: "https://api-m.paypal.com"
@@ -60,17 +60,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: node:20-alpine
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          apk add --no-cache git && \
-          corepack enable && corepack prepare pnpm@9.0.0 --activate && \
-          cd /app && \
-          pnpm install --frozen-lockfile && \
-          pnpm build && \
-          node dist/index.js
+        image: marekhotshot/igormraz-backend:0.1
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http
@@ -101,22 +92,10 @@ spec:
             port: 3000
           initialDelaySeconds: 10
           periodSeconds: 5
-      initContainers:
-      - name: copy-source
-        image: busybox
-        command: ["sh", "-c"]
-        args:
-        - |
-          echo "Source will be mounted via volume"
-        volumeMounts:
-        - name: source
-          mountPath: /source
       volumes:
       - name: data
         persistentVolumeClaim:
           claimName: backend-data
-      - name: source
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
