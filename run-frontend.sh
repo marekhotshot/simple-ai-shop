@@ -27,10 +27,10 @@ if ! curl -s http://localhost:3000/health > /dev/null 2>&1; then
   echo ""
 fi
 
-echo "Starting Next.js development server..."
-echo "Frontend will be available at: http://localhost:3000 (or 3001 if backend is on 3000)"
+echo "Starting Next.js development server on port 3001..."
+echo "Frontend will be available at: http://localhost:3001"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
-npx --yes pnpm@9.0.0 dev
+PORT=3001 npx --yes pnpm@9.0.0 dev

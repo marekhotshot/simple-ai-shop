@@ -1,12 +1,13 @@
 #!/bin/bash
-# Build and push Docker images for igormraz.com
+# Build, push, and deploy Docker images for igormraz.com
 set -e
 
 IMAGE_NAME="marekhotshot/igormraz"
-VERSION="0.4"
+VERSION="0.6"
 REGISTRY="docker.io"
+NAMESPACE="igormraz"
 
-echo "=== Building and Pushing Docker Images ==="
+echo "=== Building, Pushing, and Deploying Docker Images ==="
 echo "Image: ${IMAGE_NAME}:${VERSION}"
 echo ""
 
@@ -14,6 +15,13 @@ echo ""
 if ! command -v docker &> /dev/null; then
   echo "❌ Docker is not installed or not in PATH"
   echo "Please install Docker to build images"
+  exit 1
+fi
+
+# Check if kubectl is available
+if ! command -v kubectl &> /dev/null; then
+  echo "❌ kubectl is not installed or not in PATH"
+  echo "Please install kubectl to deploy"
   exit 1
 fi
 
@@ -32,7 +40,7 @@ docker build -f Dockerfile.backend -t ${IMAGE_NAME}-backend:${VERSION} -t ${IMAG
 echo "📦 Building frontend image..."
 cd commerce
 docker build -f Dockerfile \
-  --build-arg NEXT_PUBLIC_EXPRESS_API_URL=https://igormraz.com/api \
+  --build-arg NEXT_PUBLIC_EXPRESS_API_URL=https://igormraz.com \
   --build-arg NEXT_PUBLIC_IMAGE_BASE_URL=https://igormraz.com \
   -t ${IMAGE_NAME}-frontend:${VERSION} -t ${IMAGE_NAME}-frontend:latest .
 cd ..
@@ -60,6 +68,38 @@ echo "  - ${REGISTRY}/${IMAGE_NAME}-backend:latest"
 echo "  - ${REGISTRY}/${IMAGE_NAME}-frontend:${VERSION}"
 echo "  - ${REGISTRY}/${IMAGE_NAME}-frontend:latest"
 echo ""
-echo "To use in Kubernetes, update the image references in:"
-echo "  - k8s/backend.yaml"
-echo "  - k8s/frontend.yaml"
+
+# Deploy to Kubernetes
+echo "🚀 Deploying to Kubernetes..."
+echo ""
+
+# Update image versions in YAML files
+echo "📝 Updating image versions in k8s manifests..."
+sed -i.bak "s|image: ${IMAGE_NAME}-backend:[0-9][0-9.]*|image: ${IMAGE_NAME}-backend:${VERSION}|g" k8s/backend.yaml
+sed -i.bak "s|image: ${IMAGE_NAME}-frontend:[0-9][0-9.]*|image: ${IMAGE_NAME}-frontend:${VERSION}|g" k8s/frontend.yaml
+
+# Apply backend deployment
+echo "📦 Deploying backend..."
+kubectl apply -f k8s/backend.yaml
+
+# Apply frontend deployment
+echo "📦 Deploying frontend..."
+kubectl apply -f k8s/frontend.yaml
+
+# Wait for rollouts
+echo ""
+echo "⏳ Waiting for deployments to rollout..."
+kubectl rollout status deployment/backend -n ${NAMESPACE} --timeout=120s || echo "⚠️  Backend rollout timeout or failed"
+kubectl rollout status deployment/frontend -n ${NAMESPACE} --timeout=120s || echo "⚠️  Frontend rollout timeout or failed"
+
+# Clean up backup files
+rm -f k8s/backend.yaml.bak k8s/frontend.yaml.bak
+
+echo ""
+echo "✅ Deployment complete!"
+echo ""
+echo "Deployed version: ${VERSION}"
+echo ""
+echo "Check status with:"
+echo "  kubectl get pods -n ${NAMESPACE}"
+echo "  kubectl get svc -n ${NAMESPACE}"

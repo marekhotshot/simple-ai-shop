@@ -30,8 +30,8 @@ kubectl port-forward -n $NAMESPACE svc/backend 3000:3000 2>/dev/null &
 PF_BACKEND=$!
 
 # Port forward Frontend (if deployed)
-echo "Forwarding Frontend (localhost:3001 -> frontend:3000)..."
-kubectl port-forward -n $NAMESPACE svc/frontend 3001:3000 2>/dev/null &
+echo "Forwarding Frontend (localhost:3001 -> frontend:3001)..."
+kubectl port-forward -n $NAMESPACE svc/frontend 3001:3001 2>/dev/null &
 PF_FRONTEND=$!
 
 echo ""

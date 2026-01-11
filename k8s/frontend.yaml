@@ -5,7 +5,7 @@ metadata:
   namespace: igormraz
 data:
   NODE_ENV: "production"
-  PORT: "3000"
+  PORT: "3001"
   HOSTNAME: "0.0.0.0"
   NEXT_PUBLIC_EXPRESS_API_URL: "https://igormraz.com"
   NEXT_PUBLIC_IMAGE_BASE_URL: "https://igormraz.com"
@@ -44,10 +44,10 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: marekhotshot/igormraz-frontend:0.4
+        image: marekhotshot/igormraz-frontend:0.6
         imagePullPolicy: Always
         ports:
-        - containerPort: 3000
+        - containerPort: 3001
           name: http
         envFrom:
         - configMapRef:
@@ -64,13 +64,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 3000
+            port: 3001
           initialDelaySeconds: 40
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /
-            port: 3000
+            port: 3001
           initialDelaySeconds: 20
           periodSeconds: 5
 ---
@@ -82,8 +82,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 3001
+    targetPort: 3001
     protocol: TCP
     name: http
   selector:
@@ -172,7 +172,7 @@ spec:
           service:
             name: frontend
             port:
-              number: 3000
+              number: 3001
   - host: www.igormraz.com
     http:
       paths:
@@ -247,4 +247,4 @@ spec:
           service:
             name: frontend
             port:
-              number: 3000
+              number: 3001
