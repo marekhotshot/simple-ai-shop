@@ -3,7 +3,7 @@
 set -e
 
 IMAGE_NAME="marekhotshot/igormraz"
-VERSION="0.1"
+VERSION="0.4"
 REGISTRY="docker.io"
 
 echo "=== Building and Pushing Docker Images ==="
@@ -17,12 +17,10 @@ if ! command -v docker &> /dev/null; then
   exit 1
 fi
 
-# Check if logged in to Docker Hub
-if ! docker info | grep -q "Username"; then
-  echo "⚠️  Not logged in to Docker Hub"
-  echo "Please run: docker login"
-  exit 1
-fi
+# Check if logged in to Docker Hub (skip check - user should ensure they're logged in)
+echo "ℹ️  Assuming Docker Hub login is configured"
+echo "   If push fails, run: docker login"
+echo ""
 
 cd "$(dirname "$0")"
 
@@ -33,7 +31,10 @@ docker build -f Dockerfile.backend -t ${IMAGE_NAME}-backend:${VERSION} -t ${IMAG
 # Build frontend image
 echo "📦 Building frontend image..."
 cd commerce
-docker build -f Dockerfile -t ${IMAGE_NAME}-frontend:${VERSION} -t ${IMAGE_NAME}-frontend:latest .
+docker build -f Dockerfile \
+  --build-arg NEXT_PUBLIC_EXPRESS_API_URL=https://igormraz.com/api \
+  --build-arg NEXT_PUBLIC_IMAGE_BASE_URL=https://igormraz.com \
+  -t ${IMAGE_NAME}-frontend:${VERSION} -t ${IMAGE_NAME}-frontend:latest .
 cd ..
 
 # Tag images

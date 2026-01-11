@@ -3,8 +3,23 @@ import { z } from 'zod';
 import { pool, query } from '../db.js';
 import { loadSetting } from '../lib/settings.js';
 import { config } from '../lib/env.js';
+import { sendMail } from '../lib/email.js';
 
 const router = Router();
+
+// Check if PayPal is configured
+router.get('/configured', async (_req, res) => {
+  try {
+    const mode = (await loadSetting('paypal.mode')) ?? config.paypal.mode;
+    const prefix = mode === 'live' ? 'paypal.live' : 'paypal.sandbox';
+    const clientId = await loadSetting(`${prefix}.client_id`);
+    const clientSecret = await loadSetting(`${prefix}.client_secret`);
+    
+    res.json({ configured: !!(clientId && clientSecret) });
+  } catch (error) {
+    res.json({ configured: false });
+  }
+});
 
 async function getPayPalToken() {
   const mode = (await loadSetting('paypal.mode')) ?? config.paypal.mode;
@@ -84,11 +99,44 @@ router.post('/create-order', async (req, res) => {
   }
 
   const data = (await response.json()) as { id: string };
-  await query(
-    `INSERT INTO orders (product_id, paypal_order_id, status, amount_cents)
-     VALUES ($1, $2, 'CREATED', $3)`,
-    [product.id, data.id, product.price_cents],
-  );
+  
+  // Use transaction to ensure product is reserved when order is created
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Check product is still available
+    const checkProduct = await client.query<{ status: string }>(
+      'SELECT status FROM products WHERE id = $1 FOR UPDATE',
+      [product.id],
+    );
+    
+    if (checkProduct.rows[0]?.status !== 'AVAILABLE') {
+      await client.query('ROLLBACK');
+      res.status(409).json({ error: 'Product no longer available' });
+      return;
+    }
+
+    // Create order
+    await client.query(
+      `INSERT INTO orders (product_id, paypal_order_id, status, amount_cents)
+       VALUES ($1, $2, 'CREATED', $3)`,
+      [product.id, data.id, product.price_cents],
+    );
+
+    // Reserve the product
+    await client.query(
+      "UPDATE products SET status = 'RESERVED', updated_at = NOW() WHERE id = $1",
+      [product.id],
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 
   res.json({ orderId: data.id });
 });
@@ -144,14 +192,15 @@ router.post('/capture-order', async (req, res) => {
       return;
     }
 
+    // Update product from RESERVED to SOLD (or AVAILABLE if somehow still available)
     const updateProduct = await client.query(
-      "UPDATE products SET status = 'SOLD', updated_at = NOW() WHERE id = $1 AND status = 'AVAILABLE'",
+      "UPDATE products SET status = 'SOLD', updated_at = NOW() WHERE id = $1 AND status IN ('AVAILABLE', 'RESERVED')",
       [order.product_id],
     );
 
     if (updateProduct.rowCount === 0) {
       await client.query('ROLLBACK');
-      res.status(409).json({ error: 'Product already sold' });
+      res.status(409).json({ error: 'Product status cannot be updated' });
       return;
     }
 
@@ -173,6 +222,26 @@ router.post('/capture-order', async (req, res) => {
         order.id,
       ],
     );
+
+    // Send confirmation email
+    if (data.payer?.email_address) {
+      try {
+        await sendMail({
+          to: data.payer.email_address,
+          subject: 'Order Confirmation - Payment Received',
+          html: `
+            <h2>Order Confirmation</h2>
+            <p>Thank you for your order!</p>
+            <p><strong>Order ID:</strong> ${order.id}</p>
+            <p><strong>PayPal Order ID:</strong> ${parsed.data.orderId}</p>
+            <p><strong>Status:</strong> Payment received and confirmed</p>
+            <p>Your order will be processed and shipped soon. You will receive a shipping notification once your order is on its way.</p>
+          `,
+        });
+      } catch (emailError) {
+        console.error('Failed to send order confirmation email:', emailError);
+      }
+    }
 
     await client.query('COMMIT');
     res.json({ status: data.status, captureId });

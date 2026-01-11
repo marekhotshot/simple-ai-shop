@@ -4,6 +4,8 @@ import publicRoutes from './routes/public.js';
 import adminRoutes from './routes/admin.js';
 import paypalRoutes from './routes/paypal.js';
 import aiRoutes from './routes/ai.js';
+import ordersRoutes from './routes/orders.js';
+import shippingRoutes from './routes/shipping.js';
 import { config } from './lib/env.js';
 
 const app = express();
@@ -36,6 +38,8 @@ app.use('/api', publicRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', aiRoutes);
 app.use('/api/paypal', paypalRoutes);
+app.use('/api/orders', ordersRoutes);
+app.use('/api/shipping', shippingRoutes);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

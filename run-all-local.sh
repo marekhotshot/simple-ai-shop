@@ -2,7 +2,8 @@
 # Run both backend and frontend locally with port-forwarded database
 set -e
 
-export KUBECONFIG=/workspaces/simple-ai-shop/kubeconfig
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KUBECONFIG="${SCRIPT_DIR}/kubeconfig"
 NAMESPACE=igormraz
 
 echo "=== Starting Complete Local Development Environment ==="
@@ -32,9 +33,10 @@ fi
 
 # Step 2: Start PostgreSQL port-forward
 echo "Starting PostgreSQL port-forward..."
-kubectl port-forward -n $NAMESPACE svc/postgresql 5432:5432 > /dev/null 2>&1 &
+# Use --kubeconfig flag to ensure correct config in background processes
+kubectl --kubeconfig="${KUBECONFIG}" port-forward -n $NAMESPACE svc/postgresql 5432:5432 > /tmp/db-portforward.log 2>&1 &
 PF_PG=$!
-sleep 2
+sleep 3
 
 # Wait for database
 echo "Waiting for database connection..."

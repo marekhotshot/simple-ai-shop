@@ -13,13 +13,31 @@ router.get('/products', async (req, res) => {
 
   const params: Array<string | boolean> = [];
   const filters: string[] = [];
+  
+  // Filter by category using product_tags table (supports multiple tags)
   if (category) {
-    params.push(category);
-    filters.push(`p.category = $${params.length}`);
+    // Map collection names to tag values
+    const categoryMap: Record<string, string> = {
+      'paintings': 'PAINTINGS',
+      'sculptures': 'SCULPTURES',
+      'wall_carvings': 'WALL_CARVINGS',
+      'free_standing': 'FREE_STANDING',
+      'nature': 'NATURE_INSPIRED',
+      'fantasy': 'FANTASY_MYTH',
+      'custom': 'CUSTOM',
+    };
+    const tagValue = categoryMap[category.toLowerCase()] || category.toUpperCase();
+    params.push(tagValue);
+    // Join with product_tags to filter by tag
+    filters.push(`EXISTS (SELECT 1 FROM product_tags pt WHERE pt.product_id = p.id AND pt.tag = $${params.length})`);
   }
+  
   if (availableOnly) {
-    // Note: Not using a parameter here since we're using a hardcoded value
-    filters.push(`p.status = 'AVAILABLE'`);
+    filters.push(`p.status = 'AVAILABLE'`); // Only show AVAILABLE, exclude RESERVED and SOLD
+  } else {
+    // Show all products including SOLD and RESERVED (for portfolio view)
+    // Only hide HIDDEN products
+    filters.push(`p.status != 'HIDDEN'`);
   }
 
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -29,13 +47,17 @@ router.get('/products', async (req, res) => {
     category: string;
     price_cents: number;
     status: string;
+    size: string | null;
+    finish: string | null;
+    image_orientation: string | null;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
     desc_en: string | null;
     primary_image: string | null;
+    created_at: Date;
   }>(
-    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+    `SELECT DISTINCT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation, p.created_at,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en,
       img.path AS primary_image
@@ -50,18 +72,29 @@ router.get('/products', async (req, res) => {
     params.length ? params : undefined,
   );
 
-  const response = rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    category: row.category,
-    priceCents: row.price_cents,
-    status: row.status,
-    title: fallbackText(row.title_sk ?? '', row.title_en, locale),
-    descriptionShort: fallbackText(row.desc_sk ?? '', row.desc_en, locale),
-    primaryImage: row.primary_image,
+  // Fetch tags for each product
+  const productsWithTags = await Promise.all(rows.map(async (row) => {
+    const tags = await query<{ tag: string }>(
+      'SELECT tag FROM product_tags WHERE product_id = $1 ORDER BY tag',
+      [row.id],
+    );
+    return {
+      id: row.id,
+      slug: row.slug,
+      category: row.category,
+      tags: tags.map(t => t.tag),
+      priceCents: row.price_cents,
+      status: row.status,
+      size: row.size || null,
+      finish: row.finish || null,
+      imageOrientation: row.image_orientation || null,
+      title: fallbackText(row.title_sk ?? '', row.title_en, locale),
+      descriptionShort: fallbackText(row.desc_sk ?? '', row.desc_en, locale),
+      primaryImage: row.primary_image,
+    };
   }));
 
-  res.json({ products: response });
+  res.json({ products: productsWithTags });
 });
 
 router.get('/products/:id/recommendations', async (req, res) => {
@@ -134,12 +167,14 @@ router.get('/products/id/:id', async (req, res) => {
     category: string;
     price_cents: number;
     status: string;
+    size: string | null;
+    finish: string | null;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
     desc_en: string | null;
   }>(
-    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en
     FROM products p
@@ -165,6 +200,8 @@ router.get('/products/id/:id', async (req, res) => {
     category: rows[0].category,
     priceCents: rows[0].price_cents,
     status: rows[0].status,
+    size: rows[0].size || null,
+    finish: rows[0].finish || null,
     title: fallbackText(rows[0].title_sk ?? '', rows[0].title_en, locale),
     description: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
     descriptionShort: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
@@ -182,12 +219,15 @@ router.get('/products/:slug', async (req, res) => {
     category: string;
     price_cents: number;
     status: string;
+    size: string | null;
+    finish: string | null;
+    image_orientation: string | null;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
     desc_en: string | null;
   }>(
-    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en
     FROM products p
@@ -213,6 +253,9 @@ router.get('/products/:slug', async (req, res) => {
     category: rows[0].category,
     priceCents: rows[0].price_cents,
     status: rows[0].status,
+    size: rows[0].size || null,
+    finish: rows[0].finish || null,
+    imageOrientation: rows[0].image_orientation || null,
     title: fallbackText(rows[0].title_sk ?? '', rows[0].title_en, locale),
     description: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),
     descriptionShort: fallbackText(rows[0].desc_sk ?? '', rows[0].desc_en, locale),

@@ -7,10 +7,10 @@ data:
   NODE_ENV: "production"
   PORT: "3000"
   HOSTNAME: "0.0.0.0"
-  NEXT_PUBLIC_EXPRESS_API_URL: "https://igormraz.com/api"
+  NEXT_PUBLIC_EXPRESS_API_URL: "https://igormraz.com"
   NEXT_PUBLIC_IMAGE_BASE_URL: "https://igormraz.com"
   EXPRESS_API_URL: "http://backend:3000"
-  IMAGE_BASE_URL: "http://backend:3000"
+  IMAGE_BASE_URL: "https://igormraz.com"
 ---
 apiVersion: v1
 kind: Secret
@@ -19,10 +19,11 @@ metadata:
   namespace: igormraz
 type: Opaque
 stringData:
-  SHOPIFY_STORE_DOMAIN: "your-store.myshopify.com"
-  SHOPIFY_STOREFRONT_ACCESS_TOKEN: "your-storefront-access-token"
+  SHOPIFY_STORE_DOMAIN: ""
+  SHOPIFY_STOREFRONT_ACCESS_TOKEN: ""
   SITE_NAME: "igormraz"
   COMPANY_NAME: "igormraz"
+  SITE_PASSWORD: "igi2026"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,7 +44,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: marekhotshot/igormraz-frontend:0.1
+        image: marekhotshot/igormraz-frontend:0.4
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -100,14 +101,50 @@ spec:
   - host: igormraz.com
     http:
       paths:
-      - path: /
+      # Backend API routes (must come before /api to match first)
+      - path: /api/products
         pathType: Prefix
         backend:
           service:
-            name: frontend
+            name: backend
             port:
               number: 3000
-      - path: /api
+      - path: /api/admin
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/shipping
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/paypal
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/custom-request
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/contact
         pathType: Prefix
         backend:
           service:
@@ -119,19 +156,63 @@ spec:
         backend:
           service:
             name: backend
+            port:
+              number: 3000
+      # Frontend (Next.js) handles everything else including /api/auth and root
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
             port:
               number: 3000
   - host: www.igormraz.com
     http:
       paths:
-      - path: /
+      # Backend API routes (must come before /api to match first)
+      - path: /api/products
         pathType: Prefix
         backend:
           service:
-            name: frontend
+            name: backend
             port:
               number: 3000
-      - path: /api
+      - path: /api/admin
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/shipping
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/paypal
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/custom-request
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/contact
         pathType: Prefix
         backend:
           service:
@@ -143,5 +224,13 @@ spec:
         backend:
           service:
             name: backend
+            port:
+              number: 3000
+      # Frontend (Next.js) handles everything else including /api/auth and root
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
             port:
               number: 3000

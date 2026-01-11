@@ -11,6 +11,19 @@
   "mounts": [
     "source=cursor-workspace-storage,target=/home/nex/.cursor-server,type=volume"
   ],
+  "forwardPorts": [3000, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Backend API",
+      "onAutoForward": "notify",
+      "protocol": "http"
+    },
+    "5432": {
+      "label": "PostgreSQL Database",
+      "onAutoForward": "silent",
+      "protocol": "tcp"
+    }
+  },
   "customizations": {
     "vscode": {
       "settings": {
