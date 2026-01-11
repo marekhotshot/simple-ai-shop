@@ -137,6 +137,13 @@ spec:
             name: backend
             port:
               number: 3000
+      - path: /api/stripe
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
       - path: /api/custom-request
         pathType: Prefix
         backend:
@@ -199,6 +206,13 @@ spec:
             port:
               number: 3000
       - path: /api/paypal
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      - path: /api/stripe
         pathType: Prefix
         backend:
           service:

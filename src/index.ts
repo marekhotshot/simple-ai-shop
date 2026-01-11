@@ -3,6 +3,7 @@ import path from 'path';
 import publicRoutes from './routes/public.js';
 import adminRoutes from './routes/admin.js';
 import paypalRoutes from './routes/paypal.js';
+import stripeRoutes from './routes/stripe.js';
 import aiRoutes from './routes/ai.js';
 import ordersRoutes from './routes/orders.js';
 import shippingRoutes from './routes/shipping.js';
@@ -38,6 +39,7 @@ app.use('/api', publicRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', aiRoutes);
 app.use('/api/paypal', paypalRoutes);
+app.use('/api/stripe', stripeRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/shipping', shippingRoutes);
 

@@ -3,9 +3,11 @@ import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import Stripe from 'stripe';
 import { query } from '../db.js';
 import { config } from '../lib/env.js';
 import { loadSettingFlags, saveSetting, loadSetting } from '../lib/settings.js';
+import { syncProductToStripe, syncAllProductsToStripe } from '../lib/stripe-sync.js';
 
 const router = Router();
 
@@ -292,6 +294,8 @@ router.get('/settings/integrations', async (_req, res) => {
     'paypal.live.client_id',
     'paypal.live.client_secret',
     'paypal.live.webhook_id',
+    'stripe.secret_key',
+    'stripe.publishable_key',
     'google.api_key',
     'google.image_model',
     'google.text_model',
@@ -323,9 +327,15 @@ router.get('/settings/integrations', async (_req, res) => {
   const clientSecret = await loadSetting(`${prefix}.client_secret`);
   const paypalConfigured = !!(clientId && clientSecret);
   
+  // Check if Stripe is configured
+  const stripeSecretKey = await loadSetting('stripe.secret_key');
+  const stripePublishableKey = await loadSetting('stripe.publishable_key');
+  const stripeConfigured = !!(stripeSecretKey && stripePublishableKey);
+  
   res.json({ 
     configured,
     paypalConfigured, // Add flag for easy frontend check
+    stripeConfigured, // Add flag for easy frontend check
   });
 });
 
@@ -355,8 +365,11 @@ router.get('/orders', async (_req, res) => {
   const rows = await query<{
     id: string;
     product_id: string;
-    paypal_order_id: string;
+    paypal_order_id: string | null;
     paypal_capture_id: string | null;
+    stripe_payment_intent_id: string | null;
+    stripe_charge_id: string | null;
+    payment_provider: string | null;
     status: string;
     amount_cents: number;
     buyer_email: string | null;
@@ -382,6 +395,9 @@ router.get('/orders', async (_req, res) => {
     productTitle: row.product_title_sk,
     paypalOrderId: row.paypal_order_id,
     paypalCaptureId: row.paypal_capture_id,
+    stripePaymentIntentId: row.stripe_payment_intent_id,
+    stripeChargeId: row.stripe_charge_id,
+    paymentProvider: row.payment_provider,
     status: row.status,
     amountCents: row.amount_cents,
     buyerEmail: row.buyer_email,
@@ -398,8 +414,11 @@ router.get('/orders/:id', async (req, res) => {
   const rows = await query<{
     id: string;
     product_id: string;
-    paypal_order_id: string;
+    paypal_order_id: string | null;
     paypal_capture_id: string | null;
+    stripe_payment_intent_id: string | null;
+    stripe_charge_id: string | null;
+    payment_provider: string | null;
     status: string;
     amount_cents: number;
     buyer_email: string | null;
@@ -432,6 +451,9 @@ router.get('/orders/:id', async (req, res) => {
     productTitle: row.product_title_sk,
     paypalOrderId: row.paypal_order_id,
     paypalCaptureId: row.paypal_capture_id,
+    stripePaymentIntentId: row.stripe_payment_intent_id,
+    stripeChargeId: row.stripe_charge_id,
+    paymentProvider: row.payment_provider,
     status: row.status,
     amountCents: row.amount_cents,
     buyerEmail: row.buyer_email,
@@ -620,6 +642,89 @@ router.post('/settings/integrations/test-google', async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: 'Google API test failed', details: String(error) });
+  }
+});
+
+// POST test Stripe
+router.post('/settings/integrations/test-stripe', async (req, res) => {
+  try {
+    const secretKey = req.body?.secretKey || await loadSetting('stripe.secret_key');
+    const publishableKey = req.body?.publishableKey || await loadSetting('stripe.publishable_key');
+    
+    if (!secretKey || !publishableKey) {
+      res.status(400).json({ error: 'Stripe keys not configured. Please enter both Secret Key and Publishable Key and save them first, or provide them in the test request.' });
+      return;
+    }
+
+    // Test with Stripe API - retrieve account info
+    const stripe = new Stripe(secretKey, {
+      apiVersion: '2025-02-24.acacia',
+    });
+
+    const account = await stripe.accounts.retrieve();
+    
+    if (account && account.id) {
+      res.json({ ok: true, message: `Stripe credentials valid. Account: ${account.id}` });
+    } else {
+      res.status(400).json({ error: 'Stripe API test failed: Invalid response' });
+    }
+  } catch (error: any) {
+    if (error.type === 'StripeAuthenticationError') {
+      res.status(400).json({ error: 'Stripe authentication failed: Invalid API key' });
+    } else {
+      res.status(500).json({ error: 'Stripe API test failed', details: String(error.message || error) });
+    }
+  }
+});
+
+// POST sync single product to Stripe
+router.post('/products/:id/sync-stripe', async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const locale = (req.body?.locale as string) || 'en';
+    
+    const result = await syncProductToStripe(productId, locale);
+    res.json({
+      ok: true,
+      message: 'Product synced to Stripe successfully',
+      stripeProductId: result.stripeProductId,
+      stripePriceId: result.stripePriceId,
+    });
+  } catch (error) {
+    console.error('Stripe sync error:', error);
+    if (error instanceof Error && error.message === 'Stripe API key not configured') {
+      res.status(503).json({ error: 'Stripe not configured' });
+      return;
+    }
+    res.status(500).json({ 
+      error: 'Failed to sync product to Stripe', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
+
+// POST sync all products to Stripe
+router.post('/products/sync-stripe-all', async (req, res) => {
+  try {
+    const locale = (req.body?.locale as string) || 'en';
+    
+    const result = await syncAllProductsToStripe(locale);
+    res.json({
+      ok: true,
+      message: `Synced ${result.synced} products to Stripe`,
+      synced: result.synced,
+      errors: result.errors,
+    });
+  } catch (error) {
+    console.error('Stripe sync all error:', error);
+    if (error instanceof Error && error.message === 'Stripe API key not configured') {
+      res.status(503).json({ error: 'Stripe not configured' });
+      return;
+    }
+    res.status(500).json({ 
+      error: 'Failed to sync products to Stripe', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
   }
 });
 
