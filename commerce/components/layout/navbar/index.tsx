@@ -84,7 +84,7 @@ export async function Navbar({ locale = 'sk' }: { locale?: string }) {
         
         <div className="flex items-center gap-3">
           <LocaleSwitcher currentLocale={locale} />
-          <CartModal />
+          <CartModal locale={locale} />
         </div>
       </div>
     </nav>

@@ -1,4 +1,4 @@
-import { getCollections, getPages, getProducts } from 'lib/express';
+import { getCollections, getPages, getCollectionProducts } from 'lib/express';
 import { baseUrl, validateEnvironmentVariables } from "lib/utils";
 import { MetadataRoute } from "next";
 
@@ -24,12 +24,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   );
 
-  const productsPromise = getProducts({}).then((products) =>
-    products.map((product) => ({
-      url: `${baseUrl}/product/${product.handle}`,
-      lastModified: product.updatedAt,
-    })),
-  );
+  // Get products and generate URLs for both locales
+  // Use getProducts with empty collection to get all products
+  const productsPromise = getCollectionProducts({ collection: "", locale: 'sk' }).then((products) => {
+    const productUrls: Route[] = [];
+    
+    // Generate URLs for both locales for each product
+    products.forEach((product) => {
+      // Add Slovak URL
+      productUrls.push({
+        url: `${baseUrl}/sk/p/${product.handle}`,
+        lastModified: product.updatedAt,
+      });
+      // Add English URL
+      productUrls.push({
+        url: `${baseUrl}/en/p/${product.handle}`,
+        lastModified: product.updatedAt,
+      });
+    });
+    
+    return productUrls;
+  });
 
   const pagesPromise = getPages().then((pages) =>
     pages.map((page) => ({

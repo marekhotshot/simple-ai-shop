@@ -21,7 +21,7 @@ type MerchandiseSearchParams = {
   [key: string]: string;
 };
 
-export default function CartModal() {
+export default function CartModal({ locale = 'sk' }: { locale?: string }) {
   const { cart, updateCartItem } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const quantityRef = useRef(cart?.totalQuantity);
@@ -112,7 +112,7 @@ export default function CartModal() {
                         );
 
                         const merchandiseUrl = createUrl(
-                          `/product/${item.merchandise.product.handle}`,
+                          `/${locale}/p/${item.merchandise.product.handle}`,
                           new URLSearchParams(merchandiseSearchParams),
                         );
 
