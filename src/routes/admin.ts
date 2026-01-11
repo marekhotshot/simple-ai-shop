@@ -30,6 +30,7 @@ const productSchema = z.object({
   size: z.string().optional().nullable(),
   finish: z.string().optional().nullable(),
   imageOrientation: z.enum(['square', 'landscape', 'portrait']).optional().nullable(),
+  featured: z.boolean().optional().default(false),
   translations: z.array(translationSchema).min(1),
 });
 
@@ -40,18 +41,19 @@ router.get('/products', async (_req, res) => {
     category: string;
     price_cents: number;
     status: string;
+    featured: boolean;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
     desc_en: string | null;
   }>(
-    `SELECT p.id, p.slug, p.category, p.price_cents, p.status,
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status, p.featured,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en
     FROM products p
     LEFT JOIN product_translations sk ON sk.product_id = p.id AND sk.locale = 'sk'
     LEFT JOIN product_translations en ON en.product_id = p.id AND en.locale = 'en'
-    ORDER BY p.created_at DESC`,
+    ORDER BY p.featured DESC, p.created_at DESC`,
   );
 
   const products = rows.map((row) => ({
@@ -60,6 +62,7 @@ router.get('/products', async (_req, res) => {
     category: row.category,
     priceCents: row.price_cents,
     status: row.status,
+    featured: row.featured,
     translations: [
       { locale: 'sk', title: row.title_sk || '', descriptionShort: row.desc_sk || '' },
       { locale: 'en', title: row.title_en || '', descriptionShort: row.desc_en || '' },
@@ -80,12 +83,13 @@ router.get('/products/:id', async (req, res) => {
     size: string | null;
     finish: string | null;
     image_orientation: string | null;
+    featured: boolean;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
     desc_en: string | null;
   }>(
-    `SELECT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation,
+    `SELECT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation, p.featured,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en
     FROM products p
@@ -120,6 +124,7 @@ router.get('/products/:id', async (req, res) => {
     size: rows[0].size || null,
     finish: rows[0].finish || null,
     imageOrientation: rows[0].image_orientation || null,
+    featured: rows[0].featured,
     translations: [
       { locale: 'sk', title: rows[0].title_sk || '', descriptionShort: rows[0].desc_sk || '' },
       { locale: 'en', title: rows[0].title_en || '', descriptionShort: rows[0].desc_en || '' },
@@ -141,10 +146,10 @@ router.post('/products', async (req, res) => {
 
   const payload = parsed.data;
   const productRows = await query<{ id: string }>(
-    `INSERT INTO products (slug, category, price_cents, status, size, finish, image_orientation)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO products (slug, category, price_cents, status, size, finish, image_orientation, featured)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [payload.slug, payload.category, payload.priceCents, payload.status, payload.size || null, payload.finish || null, payload.imageOrientation || null],
+    [payload.slug, payload.category, payload.priceCents, payload.status, payload.size || null, payload.finish || null, payload.imageOrientation || null, payload.featured || false],
   );
   const productId = productRows[0].id;
 
@@ -190,9 +195,9 @@ router.put('/products/:id', async (req, res) => {
   const payload = parsed.data;
   await query(
     `UPDATE products
-     SET slug = $1, category = $2, price_cents = $3, status = $4, size = $5, finish = $6, image_orientation = $7, updated_at = NOW()
-     WHERE id = $8`,
-    [payload.slug, payload.category, payload.priceCents, payload.status, payload.size || null, payload.finish || null, payload.imageOrientation || null, req.params.id],
+     SET slug = $1, category = $2, price_cents = $3, status = $4, size = $5, finish = $6, image_orientation = $7, featured = $8, updated_at = NOW()
+     WHERE id = $9`,
+    [payload.slug, payload.category, payload.priceCents, payload.status, payload.size || null, payload.finish || null, payload.imageOrientation || null, payload.featured || false, req.params.id],
   );
 
   for (const translation of payload.translations) {

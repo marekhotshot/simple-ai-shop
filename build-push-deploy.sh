@@ -3,7 +3,7 @@
 set -e
 
 IMAGE_NAME="marekhotshot/igormraz"
-VERSION="0.6"
+VERSION="0.7"
 REGISTRY="docker.io"
 NAMESPACE="igormraz"
 

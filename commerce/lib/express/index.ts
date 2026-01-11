@@ -147,9 +147,10 @@ function transformProduct(expressProduct: ExpressProductResponse): Product {
     size: (expressProduct as any).size || null,
     finish: (expressProduct as any).finish || null,
     imageOrientation: (expressProduct as any).imageOrientation || null,
+    featured: (expressProduct as any).featured || false,
   };
   
-  return product as Product & { status: string; category: string; size?: string | null; finish?: string | null; imageOrientation?: string | null };
+  return product as Product & { status: string; category: string; size?: string | null; finish?: string | null; imageOrientation?: string | null; featured?: boolean };
 }
 
 // Transform products array

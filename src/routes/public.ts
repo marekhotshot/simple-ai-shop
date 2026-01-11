@@ -50,6 +50,7 @@ router.get('/products', async (req, res) => {
     size: string | null;
     finish: string | null;
     image_orientation: string | null;
+    featured: boolean;
     title_sk: string | null;
     desc_sk: string | null;
     title_en: string | null;
@@ -57,7 +58,7 @@ router.get('/products', async (req, res) => {
     primary_image: string | null;
     created_at: Date;
   }>(
-    `SELECT DISTINCT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation, p.created_at,
+    `SELECT DISTINCT p.id, p.slug, p.category, p.price_cents, p.status, p.size, p.finish, p.image_orientation, p.featured, p.created_at,
       sk.title AS title_sk, sk.description_short AS desc_sk,
       en.title AS title_en, en.description_short AS desc_en,
       img.path AS primary_image
@@ -68,7 +69,7 @@ router.get('/products', async (req, res) => {
       SELECT path FROM product_images WHERE product_id = p.id ORDER BY sort_order ASC LIMIT 1
     ) img ON true
     ${whereClause}
-    ORDER BY p.created_at DESC`,
+    ORDER BY p.featured DESC, p.created_at DESC`,
     params.length ? params : undefined,
   );
 
@@ -88,6 +89,7 @@ router.get('/products', async (req, res) => {
       size: row.size || null,
       finish: row.finish || null,
       imageOrientation: row.image_orientation || null,
+      featured: row.featured,
       title: fallbackText(row.title_sk ?? '', row.title_en, locale),
       descriptionShort: fallbackText(row.desc_sk ?? '', row.desc_en, locale),
       primaryImage: row.primary_image,

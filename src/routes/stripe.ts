@@ -32,6 +32,13 @@ router.get('/configured', async (_req, res) => {
 const createPaymentIntentSchema = z.object({
   productId: z.string().uuid(),
   returnUrl: z.string().url().optional(),
+  name: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  zip: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
 });
 
 router.post('/create-payment-intent', async (req, res) => {
@@ -78,17 +85,26 @@ router.post('/create-payment-intent', async (req, res) => {
       },
     });
 
-    // Create order record
+    // Create order record with shipping info if provided
+    // Note: We do NOT reserve the product here - it will be reserved only when payment succeeds
     await client.query(
-      `INSERT INTO orders (product_id, stripe_payment_intent_id, status, amount_cents, payment_provider)
-       VALUES ($1, $2, 'CREATED', $3, 'STRIPE')`,
-      [product.id, paymentIntent.id, product.price_cents],
-    );
-
-    // Reserve the product
-    await client.query(
-      "UPDATE products SET status = 'RESERVED', updated_at = NOW() WHERE id = $1",
-      [product.id],
+      `INSERT INTO orders (product_id, stripe_payment_intent_id, status, amount_cents, payment_provider, buyer_email, shipping_name, shipping_country, shipping_address_json)
+       VALUES ($1, $2, 'CREATED', $3, 'STRIPE', $4, $5, $6, $7)`,
+      [
+        product.id,
+        paymentIntent.id,
+        product.price_cents,
+        parsed.data.email || null,
+        parsed.data.name || null,
+        parsed.data.country || null,
+        JSON.stringify({
+          address: parsed.data.address,
+          city: parsed.data.city,
+          zip: parsed.data.zip,
+          country: parsed.data.country,
+          phone: parsed.data.phone,
+        }),
+      ],
     );
 
     await client.query('COMMIT');
@@ -173,7 +189,9 @@ router.post('/confirm-payment', async (req, res) => {
       }
     }
 
-    // Update product from RESERVED to SOLD
+    // Update product to SOLD (reserve if needed, then mark as sold)
+    // This handles the case where product might still be AVAILABLE (if payment intent was created but product wasn't reserved)
+    // or already RESERVED (from a previous attempt)
     const updateProduct = await client.query(
       "UPDATE products SET status = 'SOLD', updated_at = NOW() WHERE id = $1 AND status IN ('AVAILABLE', 'RESERVED')",
       [order.product_id],
@@ -181,7 +199,7 @@ router.post('/confirm-payment', async (req, res) => {
 
     if (updateProduct.rowCount === 0) {
       await client.query('ROLLBACK');
-      res.status(409).json({ error: 'Product status cannot be updated' });
+      res.status(409).json({ error: 'Product is no longer available' });
       return;
     }
 

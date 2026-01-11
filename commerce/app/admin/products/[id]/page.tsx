@@ -40,6 +40,7 @@ export default function EditProductPage() {
     size: "",
     finish: "",
     imageOrientation: "square" as "square" | "landscape" | "portrait",
+    featured: false,
     translations: {
       sk: { title: "", descriptionShort: "" },
       en: { title: "", descriptionShort: "" },
@@ -65,6 +66,7 @@ export default function EditProductPage() {
           size: data.size || "",
           finish: data.finish || "",
           imageOrientation: data.imageOrientation || "square",
+          featured: data.featured || false,
           translations: {
             sk: {
               title: data.translations.find((t: any) => t.locale === "sk")?.title || "",
@@ -100,6 +102,7 @@ export default function EditProductPage() {
         size: formData.size || null,
         finish: formData.finish || null,
         imageOrientation: formData.imageOrientation || null,
+        featured: formData.featured,
         translations: [
           {
             locale: "sk",
@@ -505,6 +508,25 @@ export default function EditProductPage() {
                   <option value="SOLD">Sold</option>
                   <option value="HIDDEN">Hidden</option>
                 </select>
+              </div>
+              <div className="flex items-center">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.featured}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        featured: e.target.checked,
+                      })
+                    }
+                    className="rounded border-neutral-300"
+                  />
+                  <span className="text-sm font-medium">Featured</span>
+                </label>
+                <span className="ml-2 text-xs text-neutral-500">
+                  (Shown on top)
+                </span>
               </div>
             </div>
 

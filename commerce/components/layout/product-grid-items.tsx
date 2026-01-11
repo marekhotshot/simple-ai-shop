@@ -26,12 +26,29 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
-// Masonry layout - randomize products and prepare for display
+// Masonry layout - prepare products for display
+// Featured products are kept in order (already sorted by API), non-featured are shuffled
 function prepareProductsForMasonry(products: Product[]): ProductWithOrientation[] {
-  // Randomize products first
-  const shuffledProducts = shuffleArray(products);
+  // Separate featured and non-featured products
+  const featuredProducts: Product[] = [];
+  const nonFeaturedProducts: Product[] = [];
   
-  return shuffledProducts.map((product) => {
+  products.forEach((product) => {
+    const isFeatured = (product as any).featured === true;
+    if (isFeatured) {
+      featuredProducts.push(product);
+    } else {
+      nonFeaturedProducts.push(product);
+    }
+  });
+  
+  // Shuffle only non-featured products
+  const shuffledNonFeatured = shuffleArray(nonFeaturedProducts);
+  
+  // Combine: featured first (in order), then shuffled non-featured
+  const allProducts = [...featuredProducts, ...shuffledNonFeatured];
+  
+  return allProducts.map((product) => {
     const rawOrientation = (product as any).imageOrientation || 'SQUARE';
     const orientation = normalizeOrientation(rawOrientation);
     return { ...product, orientation } as ProductWithOrientation;
@@ -48,9 +65,11 @@ export default function ProductGridItems({
   const translations = {
     sk: {
       statusReserved: "Rezervované",
+      statusSold: "Predané",
     },
     en: {
       statusReserved: "Reserved",
+      statusSold: "Sold",
     },
   };
   const t = translations[locale as keyof typeof translations] || translations.sk;
@@ -97,6 +116,11 @@ export default function ProductGridItems({
                   {(product as any).status === 'RESERVED' && (
                     <span className="mt-1 inline-block rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                       {t.statusReserved}
+                    </span>
+                  )}
+                  {(product as any).status === 'SOLD' && (
+                    <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+                      {t.statusSold}
                     </span>
                   )}
                 </div>

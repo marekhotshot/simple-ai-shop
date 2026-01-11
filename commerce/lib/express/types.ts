@@ -28,6 +28,7 @@ export type ExpressProductResponse = {
   size?: string | null;
   finish?: string | null;
   imageOrientation?: string | null;
+  featured?: boolean;
   title: string;
   description?: string;
   descriptionShort: string;
